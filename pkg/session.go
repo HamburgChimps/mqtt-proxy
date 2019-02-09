@@ -1,14 +1,10 @@
 package mqtt
 
 import (
-	// "crypto/tls"
-	"net"
-	// "os"
-	"io"
-	// "strconv"
-	"sync"
-	// "sync/atomic"
 	"github.com/eclipse/paho.mqtt.golang/packets"
+	"io"
+	"net"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )

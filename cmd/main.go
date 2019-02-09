@@ -1,16 +1,11 @@
 package main
 
 import (
-	// "context"
-	// "github.com/HamburgChimps/disqtt/internal/router"
-	// "github.com/alsm/paho.mqtt.golang/paho"
 	"github.com/HamburgChimps/mqtt-proxy/pkg"
 	log "github.com/sirupsen/logrus"
 
 	"net"
 	"os"
-	// "os/signal"
-	// "syscall"
 )
 
 func main() {
@@ -23,7 +18,7 @@ func main() {
 func mqttAccept(l net.Listener) {
 	// cluster := mqtt.NewBrokerCluster()
 	cm := mqtt.NewClusterManager()
-	r := mqtt.NewRouter()
+	r := mqtt.NewRouterDemo()
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
@@ -32,14 +27,13 @@ func mqttAccept(l net.Listener) {
 			os.Exit(1)
 		}
 		// Handle connections in a new goroutine.
-		log.Infoln(cm)
 		go mqtt.HandleConnection(conn, r, cm)
 	}
 }
 
 func mqttListen() {
 	// Listen for incoming connections.
-	addr := "0.0.0.0:8989"
+	addr := "0.0.0.0:1883"
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Println("mqtt: Error listening mqtt://"+addr, err.Error())
