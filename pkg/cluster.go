@@ -2,8 +2,9 @@ package mqtt
 
 import (
 	// "contect"
+	"github.com/HuKeping/rbtree"
 	log "github.com/sirupsen/logrus"
-	// "sync"
+	"sync"
 	// "time"
 	// envoyAuth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	// envoyCore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -12,45 +13,26 @@ import (
 // const timeout = 1000 * time.Millisecond
 
 type ClusterManager struct {
-	clusters   map[string]*BrokerCluster
-	clusterReq chan interface{}
+	sync.RWMutex
+	clusters map[string]*BrokerCluster
 }
 
 func NewClusterManager() *ClusterManager {
 	clusters := make(map[string]*BrokerCluster)
 	clusters["/password"] = NewBrokerCluster("password")
 	cm := &ClusterManager{
-		clusters:   clusters,
-		clusterReq: make(chan interface{}),
+		clusters: clusters,
 	}
-	go cm.loop()
 	return cm
 }
 
 func (cm *ClusterManager) Get(mp string) *BrokerCluster {
-	out := make(chan *BrokerCluster)
-	cm.clusterReq <- &ClusterRequest{Mountpoint: mp, Out: out}
-	resp := <-out
-	return resp
-}
-
-func (cm *ClusterManager) loop() {
-	for {
-		select {
-		case req := <-cm.clusterReq:
-			switch req := req.(type) {
-			case *ClusterRequest:
-				if cluster, ok := cm.clusters[req.Mountpoint]; ok {
-					req.Out <- cluster
-				} else {
-					req.Out <- nil
-				}
-			case string:
-				delete(cm.clusters, req)
-			}
-
-		}
+	cm.RLock()
+	defer cm.RUnlock()
+	if cluster, ok := cm.clusters[mp]; ok {
+		return cluster
 	}
+	return nil
 }
 
 type ClusterRequest struct {
@@ -60,81 +42,89 @@ type ClusterRequest struct {
 
 // BrokerCluster is a round robin MQTT load balancer
 type BrokerCluster struct {
-	current int
-
-	hosts      map[int]*Broker
+	sync.RWMutex
+	current    *rbtree.Item
+	hosts      *rbtree.Rbtree
 	Mountpoint string
-	brokerReq  chan interface{}
 
 	// TlsContext *envoyAuth.UpstreamTlsContext
 }
 
 // NewBrokerCluster ...
 func NewBrokerCluster(mp string) *BrokerCluster {
-	hosts := make(map[int]*Broker)
-	hosts[0] = &Broker{Address: "0.0.0.0", Port: 1883}
-	hosts[1] = &Broker{Address: "iot.eclipse.org", Port: 1883}
+	hosts := rbtree.New()
+	hosts.Insert(&Broker{Nr: 0, Address: "0.0.0.0", Port: 1883})
+	hosts.Insert(&Broker{Nr: 1, Address: "iot.eclipse.org", Port: 1883})
+	// current := hosts.Min()
 	r := &BrokerCluster{
 		Mountpoint: mp,
-		current:    0,
 		hosts:      hosts,
-		brokerReq:  make(chan interface{}),
 	}
 	log.Infoln("Cluster", r)
-	go r.loop()
+	// go r.loop()
 	return r
 }
 
-type ReadRequest struct {
-	ID       string
-	brokerID string
-	Out      chan *Broker
-}
+func (bc *BrokerCluster) Balance() *Broker {
+	bc.RLock()
+	defer bc.RUnlock()
 
-func (bc *BrokerCluster) Get(requestID string) *Broker {
-	out := make(chan *Broker, 1)
-	bc.brokerReq <- &ReadRequest{ID: requestID, Out: out}
-	resp := <-out
-	return resp
-}
-
-type AddRequest struct {
-	ID       *string
-	brokerID int
-	Broker   *Broker
-	Out      chan bool
-}
-
-func (bc *BrokerCluster) Add(requestID *string, broker *Broker) {
-
-}
-
-func (bc *BrokerCluster) loop() {
-	for {
-		select {
-		case req := <-bc.brokerReq:
-			switch req := req.(type) {
-			case *ReadRequest:
-				if len(bc.hosts) == 0 {
-					req.Out <- nil
-				}
-				if bc.current >= len(bc.hosts) {
-					bc.current = 0
-				}
-				res := bc.hosts[bc.current]
-				bc.current++
-				req.Out <- res
-				log.Infoln(req.ID, "Found broker", res)
-			case *AddRequest:
-				bc.hosts[req.brokerID] = req.Broker
-			case int:
-				delete(bc.hosts, req)
-			}
-		}
+	if bc.hosts.Len() == 0 {
+		return nil
 	}
+	if bc.current == nil {
+		next := bc.hosts.Min()
+		bc.current = &next
+	}
+
+	current := *bc.current
+	mBroker := bc.hosts.Max().(*Broker)
+	cBroker := current.(*Broker)
+
+	if cBroker.Nr == mBroker.Nr {
+		next := bc.hosts.Min()
+		bc.current = &next
+	} else {
+		bc.hosts.Ascend(current, func(i rbtree.Item) bool {
+			if i.(*Broker).Nr > cBroker.Nr {
+				bc.current = &i
+				return false
+			}
+			return true
+		})
+	}
+
+	return cBroker
+}
+
+func (bc *BrokerCluster) Get(nr uint) *Broker {
+	bc.RLock()
+	defer bc.RUnlock()
+	found := bc.hosts.Get(&Broker{Nr: nr})
+	if found != nil {
+		return found.(*Broker)
+	}
+	return nil
+}
+
+func (bc *BrokerCluster) Add(broker *Broker) {
+	bc.Lock()
+	defer bc.Unlock()
+	bc.hosts.Insert(broker)
+}
+
+func (bc *BrokerCluster) Delete(nr uint) {
+	bc.Lock()
+	defer bc.Unlock()
+	bc.hosts.Delete(&Broker{Nr: nr})
 }
 
 type Broker struct {
+	Nr      uint
 	Address string
 	Port    int
+}
+
+func (b Broker) Less(than rbtree.Item) bool {
+	return b.Nr < than.(*Broker).Nr
 }

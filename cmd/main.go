@@ -23,6 +23,7 @@ func main() {
 func mqttAccept(l net.Listener) {
 	// cluster := mqtt.NewBrokerCluster()
 	cm := mqtt.NewClusterManager()
+	r := mqtt.NewRouter()
 	for {
 		// Listen for an incoming connection.
 		conn, err := l.Accept()
@@ -32,7 +33,7 @@ func mqttAccept(l net.Listener) {
 		}
 		// Handle connections in a new goroutine.
 		log.Infoln(cm)
-		go mqtt.HandleConnection(conn, cm)
+		go mqtt.HandleConnection(conn, r, cm)
 	}
 }
 
