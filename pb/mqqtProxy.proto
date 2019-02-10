@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+import "validate/validate.proto";
+
+
+
+service MQTTRouter {
+
+  rpc ListListeners (ListListenerRequest) returns (stream ListenerConfig);
+  rpc InsertListener (InsertListenerRequest) returns (InsertListenerResponse);
+  rpc RemoveListener (RemoveListenerRequest) returns (RemoveListenerResponse);
+
+  rpc ListRoutes (ListRoutesRequest) returns (stream Route);
+  rpc InsertRoute (InsertRouteRequest) returns (InsertRouteResponse);
+  rpc RemoveRoute (RemoveRouteRequest) returns (RemoveRouteResponse);
+
+  rpc ListClusters (ListClustersRequest) returns (stream Cluster);
+  rpc InsertCluster (InsertClusterRequest) returns (InsertClusterResponse);
+  rpc RemoveCluster (RemoveClusterRequest) returns (RemoveClusterResponse);
+
+  rpc ListBrokers (ListBrokersRequest) returns (stream BrokerConfig);
+  rpc InsertBroker (InsertBrokerRequest) returns (InsertBrokerResponse);
+  rpc RemoveBroker (RemoveBrokerRequest) returns (RemoveBrokerResponse);
+}
+
+message ListenerConfig {
+  required uint64 id = 1;
+  required Listener config = 2;
+}
+
+message Listener {
+  string protocol = 1;
+  uint32 protocol_version = 2;
+  string address = 3 [(validate.rules).string.min_bytes = 1];
+  uint32 port = 4 [(validate.rules).uint32.lte = 65535];
+}
+
+message ListListenerRequest {}
+
+message InsertListenerRequest {}
+message InsertListenerResponse {}
+
+message RemoveListenerRequest {}
+message RemoveListenerResponse {}
+
+message RouteConfig {
+  required uint64 id = 1;
+  required Route config = 2;
+
+}
+
+message Route {
+  string cluster_id = 1;
+  string client_id = 2;
+}
+
+message ListRoutesRequest {}
+
+
+message InsertRouteRequest {
+  string cluster_id = 2;
+  string client_id = 3;
+}
+
+message InsertRouteResponse {
+  required uint64 id = 1;
+}
+
+message RemoveRouteRequest {
+  required uint64 id = 1;
+}
+
+message RemoveRouteResponse {
+  required uint64 id = 1;
+  bool removed = 2;
+}
+
+message BrokerConfig {
+  required uint64 id = 1;
+  required Broker config = 2; 
+}
+
+message Broker {
+  Listener listener = 2;
+}
+
+message Cluster {
+  required uint64 id = 1;
+  string mountpoint = 2;
+  repeated Broker broker = 3;
+
+}
+
+
+message ListClustersRequest {}
+
+message InsertClusterRequest {}
+message InsertClusterResponse {}
+
+message RemoveClusterRequest {}
+message RemoveClusterResponse {}
+
+message ListBrokersRequest {}
+
+message InsertBrokerRequest {}
+message InsertBrokerResponse {}
+
+message RemoveBrokerRequest {}
+message RemoveBrokerResponse {}
