@@ -18,19 +18,19 @@ type Router struct {
 	routes *rbtree.Rbtree
 }
 
-func (r *Router) Route(cp packets.ControlPacket) (Mountpoint string) {
+func (r *Router) Route(cp packets.ControlPacket) (ClusterID string) {
 	r.RLock()
 	defer r.RUnlock()
-	mountpoint := "DENIED"
+	res := "DENIED"
 	r.routes.Ascend(r.routes.Min(), func(i rbtree.Item) bool {
 		rc := i.(*RouteConfig)
 		if rc.Match(cp) {
-			mountpoint = rc.Mountpoint
+			res = rc.ClusterID
 			return false
 		}
 		return true
 	})
-	return mountpoint
+	return res
 }
 
 type Matcher interface {
@@ -39,12 +39,12 @@ type Matcher interface {
 
 type RouteConfig struct {
 	Matcher
-	Nr         uint
-	Mountpoint string
+	ID        uint
+	ClusterID string
 }
 
 func (r RouteConfig) Less(than rbtree.Item) bool {
-	return r.Nr < than.(*RouteConfig).Nr
+	return r.ID < than.(*RouteConfig).ID
 }
 
 type ClientIDMatch struct {
@@ -107,15 +107,15 @@ func DialBroker(ID string, broker *Broker) (net.Conn, error) {
 func NewRouterDemo() *Router {
 	routes := rbtree.New()
 	routes.Insert(&RouteConfig{
-		Nr:         0,
-		Mountpoint: "/mosqsub",
+		ID:        0,
+		ClusterID: "/mosqsub",
 		Matcher: &ClientIDMatch{
 			clientID: "mosqsub",
 		},
 	})
 	routes.Insert(&RouteConfig{
-		Nr:         1,
-		Mountpoint: "/hivemq",
+		ID:        1,
+		ClusterID: "/hivemq",
 		Matcher: &ClientIDMatch{
 			clientID: "hivemq",
 		},

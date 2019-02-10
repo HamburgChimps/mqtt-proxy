@@ -42,14 +42,14 @@ type BrokerCluster struct {
 // NewBrokerClusterDemo ...
 func NewBrokerClusterDemo() (*BrokerCluster, *BrokerCluster) {
 	hosts1 := rbtree.New()
-	hosts1.Insert(&Broker{Nr: 0, Address: "broker.hivemq.com", Port: 1883})
+	hosts1.Insert(&Broker{ID: 0, Address: "broker.hivemq.com", Port: 1883})
 	bc1 := &BrokerCluster{
 		Mountpoint: "/hivemq",
 		hosts:      hosts1,
 	}
 
 	hosts2 := rbtree.New()
-	hosts2.Insert(&Broker{Nr: 1, Address: "iot.eclipse.org", Port: 1883})
+	hosts2.Insert(&Broker{ID: 1, Address: "iot.eclipse.org", Port: 1883})
 	bc2 := &BrokerCluster{
 		Mountpoint: "/mosqsub",
 		hosts:      hosts2,
@@ -58,8 +58,8 @@ func NewBrokerClusterDemo() (*BrokerCluster, *BrokerCluster) {
 }
 
 func (bc *BrokerCluster) Balance() *Broker {
-	bc.RLock()
-	defer bc.RUnlock()
+	bc.Lock()
+	defer bc.Unlock()
 
 	if bc.hosts.Len() == 0 {
 		return nil
@@ -73,12 +73,12 @@ func (bc *BrokerCluster) Balance() *Broker {
 	mBroker := bc.hosts.Max().(*Broker)
 	cBroker := current.(*Broker)
 
-	if cBroker.Nr == mBroker.Nr {
+	if cBroker.ID == mBroker.ID {
 		next := bc.hosts.Min()
 		bc.current = &next
 	} else {
 		bc.hosts.Ascend(current, func(i rbtree.Item) bool {
-			if i.(*Broker).Nr > cBroker.Nr {
+			if i.(*Broker).ID > cBroker.ID {
 				bc.current = &i
 				return false
 			}
@@ -89,10 +89,10 @@ func (bc *BrokerCluster) Balance() *Broker {
 	return cBroker
 }
 
-func (bc *BrokerCluster) Get(nr uint) *Broker {
+func (bc *BrokerCluster) Get(ID uint) *Broker {
 	bc.RLock()
 	defer bc.RUnlock()
-	found := bc.hosts.Get(&Broker{Nr: nr})
+	found := bc.hosts.Get(&Broker{ID: ID})
 	if found != nil {
 		return found.(*Broker)
 	}
@@ -105,18 +105,18 @@ func (bc *BrokerCluster) Add(broker *Broker) {
 	bc.hosts.Insert(broker)
 }
 
-func (bc *BrokerCluster) Delete(nr uint) {
+func (bc *BrokerCluster) Delete(ID uint) {
 	bc.Lock()
 	defer bc.Unlock()
-	bc.hosts.Delete(&Broker{Nr: nr})
+	bc.hosts.Delete(&Broker{ID: ID})
 }
 
 type Broker struct {
-	Nr      uint
+	ID      uint
 	Address string
 	Port    int
 }
 
 func (b Broker) Less(than rbtree.Item) bool {
-	return b.Nr < than.(*Broker).Nr
+	return b.ID < than.(*Broker).ID
 }
